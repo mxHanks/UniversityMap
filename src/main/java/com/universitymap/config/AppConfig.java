@@ -37,6 +37,8 @@ public class AppConfig {
         private boolean enabled = true;
         /** 进入网站的校验码（留空视为关闭核验） */
         private String verifyCode = "";
+        /** 校验码提示（可选，显示在核验页） */
+        private String verifyHint = "";
         /** 通过核验后的有效时长（秒），默认 7 天 */
         private long sessionTtl = 604800;
 
@@ -47,6 +49,10 @@ public class AppConfig {
         public String getVerifyCode() { return verifyCode == null ? "" : verifyCode; }
 
         public void setVerifyCode(String verifyCode) { this.verifyCode = verifyCode; }
+
+        public String getVerifyHint() { return verifyHint == null ? "" : verifyHint; }
+
+        public void setVerifyHint(String verifyHint) { this.verifyHint = verifyHint; }
 
         public long getSessionTtl() { return sessionTtl; }
 

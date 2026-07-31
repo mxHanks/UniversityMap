@@ -45,4 +45,10 @@ public class SiteModelAdvice {
     public String netFilingNumber() {
         return appConfig.getSite().getNetFiling();
     }
+
+    /** 校验码提示（可选，显示在核验页） */
+    @ModelAttribute("verifyHint")
+    public String verifyHint() {
+        return appConfig.getSecurity().getVerifyHint();
+    }
 }

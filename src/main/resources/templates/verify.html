@@ -60,6 +60,16 @@
             padding: 8px 12px;
             margin-top: 14px;
         }
+        .verify-hint {
+            margin-top: 16px;
+            font-size: 14px;
+            color: #d63031;
+            background: #fff3f0;
+            border: 1px solid #ffd0cc;
+            border-radius: 10px;
+            padding: 10px 12px;
+            line-height: 1.5;
+        }
         .verify-card .footer {
             margin-top: 20px;
             font-size: 12px;
@@ -74,6 +84,7 @@
 <div class="verify-card">
     <div class="brand">🍚 蹭饭地图</div>
     <div class="subtitle">该站点已开启信息安全核验<br>请输入访问校验码后进入</div>
+    <div class="verify-hint" th:if="${!#strings.isEmpty(verifyHint)}" th:text="${verifyHint}"></div>
 
     <form method="post" th:action="@{/verify}">
         <input type="hidden" name="next" th:value="${next}">

@@ -32,6 +32,7 @@
 |--------|------|
 | `server.port` | 应用运行端口（默认 8081） |
 | `app.security.verify-code` | 访问校验码。填写后开启信息安全核验，留空则关闭 |
+| `app.security.verify-hint` | 校验码提示（可选）：显示在核验页，帮访问者想到校验码 |
 | `app.amap.key` | 高德地图 Web 端(JS API) Key |
 | `app.site.icp` | ICP 备案号（页面底部展示，可选） |
 | `app.site.net-filing` | 公安网备号（可选，页面底部展示） |
@@ -43,6 +44,7 @@ app:
   security:
     enabled: true          # 是否开启访问核验
     verify-code: ""        # 访问校验码，留空=关闭核验
+    verify-hint: ""        # 校验码提示（可选），如：班级是什么？
     session-ttl: 604800    # 通过核验后的有效时长（秒），默认7天
   amap:
     key: "YOUR_AMAP_KEY"   # 高德地图 Key
