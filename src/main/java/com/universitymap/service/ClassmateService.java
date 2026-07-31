@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.universitymap.entity.Classmate;
+import com.universitymap.util.AppPaths;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -33,10 +34,11 @@ public class ClassmateService {
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
                 .enable(SerializationFeature.INDENT_OUTPUT);
-        // dataDir 可能是相对路径或绝对路径
+        // dataDir 可为绝对路径；相对路径一律以「应用主目录」（jar 同目录）为基准，
+        // 与 config.yml 一致，避免多个实例因启动目录相同而共用同一份数据。
         File dir = new File(dataDir);
         if (!dir.isAbsolute()) {
-            dir = new File(System.getProperty("user.dir"), dataDir);
+            dir = new File(AppPaths.findAppHome(), dataDir);
         }
         this.dataFile = new File(dir, "classmates.json");
         System.out.println("🗄️ 数据文件路径: " + this.dataFile.getAbsolutePath());
