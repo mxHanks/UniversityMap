@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV 导入 - 蹭饭地图</title>
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #f5f5f5; font-size: 14px; }
+        .navbar { background: linear-gradient(135deg, #ff6b6b, #ee5a24) !important; }
+        .card { border: none; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        .card-header { background: transparent; border-bottom: 1px solid #eee; padding: 20px 24px 16px; }
+        .card-body { padding: 24px; }
+        .btn-primary {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            border: none; border-radius: 10px; padding: 10px 40px; font-weight: 600; color: white;
+        }
+        .btn-primary:hover { opacity: 0.9; color: white; }
+        .btn-primary:disabled { opacity: 0.5; }
+        .drop-zone {
+            border: 2px dashed #ddd; border-radius: 16px; padding: 40px 20px;
+            text-align: center; cursor: pointer; transition: all 0.3s;
+            background: #fafafa;
+        }
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: #ee5a24; background: #fff5f0;
+        }
+        .drop-zone .icon { font-size: 48px; }
+        .drop-zone .text { color: #999; margin-top: 8px; }
+        .drop-zone .hint { font-size: 12px; color: #bbb; margin-top: 4px; }
+        #preview { display: none; margin-top: 20px; }
+        #preview table { font-size: 13px; }
+        #preview table th { background: #fff3e0; }
+        #result { display: none; margin-top: 20px; }
+        .error-list { max-height: 200px; overflow-y: auto; font-size: 12px; color: #856404; }
+
+        /* ===== 页面底部备案信息 ===== */
+        .site-footer {
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+            padding: 16px 0 20px;
+        }
+        .site-footer a { color: #999; text-decoration: none; }
+        .site-footer span + span::before { content: " · "; }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-dark">
+    <div class="container-fluid px-4">
+        <a class="navbar-brand fw-bold" href="/">🍚 蹭饭地图</a>
+        <span class="text-white-50 small">CSV 导入</span>
+    </div>
+</nav>
+
+<div class="container py-4" style="max-width: 720px;">
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">📥 从 CSV 导入同学数据</h5>
+            <small class="text-muted">从腾讯文档导出 CSV 后上传，自动覆盖现有数据</small>
+        </div>
+        <div class="card-body">
+            <!-- 操作说明 -->
+            <div class="alert alert-info py-2 px-3 mb-4" style="font-size: 13px;">
+                <strong>💡 操作步骤：</strong>
+                腾讯文档 → 左上角菜单 → 导出为 → CSV →
+                上传到本页面
+            </div>
+
+            <!-- 上传区域 -->
+            <div class="drop-zone" id="dropZone">
+                <div class="icon">📄</div>
+                <div class="text"><strong>点击选择</strong> 或将 CSV 文件拖到这里</div>
+                <div class="hint">支持 .csv 文件，需包含「姓名」「城市」等列</div>
+                <input type="file" id="fileInput" accept=".csv" style="display:none">
+            </div>
+
+            <!-- 预览 -->
+            <div id="preview">
+                <h6 class="mb-2">📊 数据预览</h6>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover mb-0">
+                        <thead id="previewHead"></thead>
+                        <tbody id="previewBody"></tbody>
+                    </table>
+                </div>
+                <div class="mt-2 text-muted small" id="previewInfo"></div>
+                <button class="btn btn-primary mt-3" id="importBtn" onclick="doImport()">
+                    ⬆️ 确认导入
+                </button>
+            </div>
+
+            <!-- 结果 -->
+            <div id="result">
+                <div class="alert" id="resultAlert">
+                    <span id="resultMessage"></span>
+                </div>
+                <div class="error-list" id="errorList"></div>
+                <a href="/" class="btn btn-primary mt-3">🗺️ 返回地图</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    var currentFile = null;
+    var dropZone = document.getElementById('dropZone');
+    var fileInput = document.getElementById('fileInput');
+
+    // 点击上传
+    dropZone.onclick = function() { fileInput.click(); };
+
+    // 拖拽上传
+    dropZone.ondragover = function(e) { e.preventDefault(); this.classList.add('dragover'); };
+    dropZone.ondragleave = function() { this.classList.remove('dragover'); };
+    dropZone.ondrop = function(e) {
+        e.preventDefault();
+        this.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+    };
+    fileInput.onchange = function() { if (this.files.length > 0) handleFile(this.files[0]); };
+
+    function handleFile(file) {
+        if (!file.name.endsWith('.csv')) {
+            alert('请选择 CSV 文件');
+            return;
+        }
+        currentFile = file;
+        dropZone.style.display = 'none';
+        document.getElementById('preview').style.display = 'block';
+
+        // 预览前20行
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var text = e.target.result;
+            var lines = text.split('\n').filter(function(l) { return l.trim(); });
+            var headers = parseCsvLine(lines[0]);
+            var headHtml = '<tr>' + headers.map(function(h) { return '<th>' + h + '</th>'; }).join('') + '</tr>';
+            document.getElementById('previewHead').innerHTML = headHtml;
+
+            var previewLines = lines.slice(1, Math.min(21, lines.length));
+            var bodyHtml = previewLines.map(function(line) {
+                var fields = parseCsvLine(line);
+                return '<tr>' + fields.map(function(f) { return '<td>' + f + '</td>'; }).join('') + '</tr>';
+            }).join('');
+            document.getElementById('previewBody').innerHTML = bodyHtml;
+
+            document.getElementById('previewInfo').textContent =
+                '共 ' + (lines.length - 1) + ' 行数据' +
+                (lines.length > 21 ? '（显示前20行）' : '') +
+                ' · 列：' + headers.join('、');
+        };
+        reader.readAsText(file, 'UTF-8');
+    }
+
+    function doImport() {
+        if (!currentFile) return;
+        var btn = document.getElementById('importBtn');
+        btn.disabled = true;
+        btn.textContent = '⏳ 导入中...';
+
+        var formData = new FormData();
+        formData.append('file', currentFile);
+
+        fetch('/api/classmates/import', { method: 'POST', body: formData })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                document.getElementById('preview').style.display = 'none';
+                document.getElementById('result').style.display = 'block';
+                var alert = document.getElementById('resultAlert');
+                var msg = document.getElementById('resultMessage');
+
+                if (data.success) {
+                    alert.className = 'alert alert-success';
+                    msg.textContent = '✅ ' + data.message;
+                    if (data.errors && data.errors.length > 0) {
+                        document.getElementById('errorList').innerHTML =
+                            '<strong>⚠️ 警告：</strong><br>' +
+                            data.errors.join('<br>');
+                    }
+                } else {
+                    alert.className = 'alert alert-danger';
+                    msg.textContent = '❌ ' + data.message;
+                }
+            })
+            .catch(function(err) {
+                document.getElementById('preview').style.display = 'none';
+                document.getElementById('result').style.display = 'block';
+                document.getElementById('resultAlert').className = 'alert alert-danger';
+                document.getElementById('resultMessage').textContent = '❌ 导入失败：' + err.message;
+            });
+    }
+
+    function parseCsvLine(line) {
+        var fields = [], inQuotes = false, current = '';
+        for (var i = 0; i < line.length; i++) {
+            var c = line[i];
+            if (c === '"') {
+                if (inQuotes && i + 1 < line.length && line[i+1] === '"') {
+                    current += '"'; i++;
+                } else {
+                    inQuotes = !inQuotes;
+                }
+            } else if (c === ',' && !inQuotes) {
+                fields.push(current.trim()); current = '';
+            } else {
+                current += c;
+            }
+        }
+        fields.push(current.trim());
+        return fields;
+    }
+</script>
+
+<!-- 页面底部备案信息（在 config.yml 的 app.site 中配置） -->
+<footer class="site-footer"
+        th:if="${!#strings.isEmpty(icpNumber) or !#strings.isEmpty(netFilingNumber)}">
+    <span th:if="${!#strings.isEmpty(icpNumber)}">
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener" th:text="${icpNumber}"></a>
+    </span>
+    <span th:if="${!#strings.isEmpty(netFilingNumber)}" th:text="${netFilingNumber}"></span>
+</footer>
+
+</body>
+</html>

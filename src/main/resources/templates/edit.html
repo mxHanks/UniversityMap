@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>编辑同学 - 蹭饭地图</title>
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #f5f5f5; }
+        .navbar { background: linear-gradient(135deg, #ff6b6b, #ee5a24) !important; }
+        .card { border: none; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        .card-header { background: transparent; border-bottom: 1px solid #eee; padding: 20px 24px 16px; }
+        .card-body { padding: 24px; }
+        .form-label { font-weight: 500; color: #555; font-size: 14px; }
+        .form-control, .form-select {
+            border-radius: 10px;
+            border: 1.5px solid #e0e0e0;
+            padding: 10px 14px;
+            font-size: 14px;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: #ff6b6b;
+            box-shadow: 0 0 0 3px #ff6b6b20;
+        }
+        .btn-save {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            border: none;
+            border-radius: 10px;
+            padding: 10px 40px;
+            font-weight: 600;
+            color: white;
+        }
+        .btn-save:hover { opacity: 0.9; color: white; }
+        .hint-text { font-size: 13px; color: #999; margin-top: 4px; }
+        .info-badge {
+            background: #fff3e0;
+            color: #ee5a24;
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        /* ===== 页面底部备案信息 ===== */
+        .site-footer {
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+            padding: 16px 0 20px;
+        }
+        .site-footer a { color: #999; text-decoration: none; }
+        .site-footer span + span::before { content: " · "; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark">
+    <div class="container-fluid px-4">
+        <a class="navbar-brand fw-bold" href="/">🍚 蹭饭地图</a>
+        <span class="text-white-50 small">编辑同学信息</span>
+    </div>
+</nav>
+
+<div class="container py-4" style="max-width: 640px;">
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">✏️ 编辑同学信息</h5>
+            <small class="text-muted">更新 <strong th:text="${classmate.name}">姓名</strong> 的去向</small>
+        </div>
+        <div class="card-body">
+            <form th:action="@{'/classmates/update/' + ${classmate.id}}" method="post">
+                <!-- 当前信息提示 -->
+                <div class="info-badge">
+                    📍 当前：<strong th:text="${classmate.city}">城市</strong> ·
+                    🎓 <strong th:text="${classmate.university}">大学</strong>
+                </div>
+
+                <!-- 姓名 -->
+                <div class="mb-3">
+                    <label class="form-label">姓名 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="name" required maxlength="50"
+                           th:value="${classmate.name}">
+                </div>
+
+                <!-- 大学 -->
+                <div class="mb-3">
+                    <label class="form-label">录取大学</label>
+                    <input type="text" class="form-control" name="university" maxlength="100"
+                           th:value="${classmate.university}" placeholder="选填">
+                </div>
+
+                <!-- 省份选择 -->
+                <div class="mb-3">
+                    <label class="form-label">省份 <span class="text-danger">*</span></label>
+                    <select class="form-select" id="provinceSelect">
+                        <option value="">—— 请选择省份 ——</option>
+                    </select>
+                </div>
+
+                <!-- 城市选择 -->
+                <div class="mb-3">
+                    <label class="form-label">城市 <span class="text-danger">*</span></label>
+                    <select class="form-select" name="city" id="citySelect" required>
+                        <option value="">—— 请先选择省份 ——</option>
+                    </select>
+                </div>
+
+                <!-- 隐藏字段 -->
+                <input type="hidden" name="province" id="provinceInput"
+                       th:value="${classmate.province}">
+                <input type="hidden" name="latitude" id="latitudeInput"
+                       th:value="${classmate.latitude}">
+                <input type="hidden" name="longitude" id="longitudeInput"
+                       th:value="${classmate.longitude}">
+
+                <!-- 备注 -->
+                <div class="mb-4">
+                    <label class="form-label">留言 / 备注</label>
+                    <textarea class="form-control" name="note" rows="2" maxlength="500"
+                              th:text="${classmate.note}"></textarea>
+                </div>
+
+                <!-- 按钮 -->
+                <div class="d-flex gap-3">
+                    <button type="submit" class="btn btn-save" id="saveBtn">💾 保存修改</button>
+                    <a href="/" class="btn btn-outline-secondary rounded-pill px-4">← 返回地图</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    var currentCity = /*[[${classmate.city}]]*/ '';
+    var currentProvince = /*[[${classmate.province}]]*/ '';
+    var cityData = {};
+
+    // 加载省份数据
+    fetch('/api/provinces')
+        .then(function(r) { return r.json(); })
+        .then(function(provinces) {
+            var sel = document.getElementById('provinceSelect');
+            provinces.forEach(function(p) {
+                var opt = document.createElement('option');
+                opt.value = p.province;
+                opt.textContent = p.province;
+                sel.appendChild(opt);
+                cityData[p.province] = p.cities;
+            });
+
+            // 如果有当前省份，预选中
+            if (currentProvince) {
+                document.getElementById('provinceSelect').value = currentProvince;
+                // 触发 change 填充城市
+                var evt = new Event('change');
+                document.getElementById('provinceSelect').dispatchEvent(evt);
+            }
+        });
+
+    // 省份变更 → 更新城市下拉
+    document.getElementById('provinceSelect').addEventListener('change', function() {
+        var citySel = document.getElementById('citySelect');
+        citySel.innerHTML = '<option value="">—— 请选择城市 ——</option>';
+        document.getElementById('provinceInput').value = this.value || '';
+
+        var province = this.value;
+        if (!province) return;
+
+        var cities = cityData[province] || [];
+        cities.forEach(function(c) {
+            var opt = document.createElement('option');
+            opt.value = c.name;
+            opt.textContent = c.name;
+            opt.dataset.lat = c.latitude;
+            opt.dataset.lng = c.longitude;
+            if (c.name === currentCity) {
+                opt.selected = true;
+            }
+            citySel.appendChild(opt);
+        });
+
+        // 如果已选中城市，填充坐标
+        if (currentCity) {
+            var evt2 = new Event('change');
+            citySel.dispatchEvent(evt2);
+        }
+    });
+
+    // 城市变更 → 填充经纬度
+    document.getElementById('citySelect').addEventListener('change', function() {
+        var selected = this.options[this.selectedIndex];
+        if (selected && selected.dataset && selected.dataset.lat) {
+            document.getElementById('latitudeInput').value = selected.dataset.lat;
+            document.getElementById('longitudeInput').value = selected.dataset.lng;
+        }
+    });
+</script>
+
+<!-- 页面底部备案信息（在 config.yml 的 app.site 中配置） -->
+<footer class="site-footer"
+        th:if="${!#strings.isEmpty(icpNumber) or !#strings.isEmpty(netFilingNumber)}">
+    <span th:if="${!#strings.isEmpty(icpNumber)}">
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener" th:text="${icpNumber}"></a>
+    </span>
+    <span th:if="${!#strings.isEmpty(netFilingNumber)}" th:text="${netFilingNumber}"></span>
+</footer>
+
+</body>
+</html>

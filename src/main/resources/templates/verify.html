@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>访问核验 - 蹭饭地图</title>
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            padding: 16px;
+            margin: 0;
+        }
+        .verify-card {
+            width: 100%;
+            max-width: 400px;
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+            padding: 40px 32px;
+            text-align: center;
+        }
+        .verify-card .brand { font-size: 20px; font-weight: 700; color: #ee5a24; }
+        .verify-card .subtitle { font-size: 13px; color: #999; margin-top: 6px; }
+        .verify-card .code-input {
+            border-radius: 12px;
+            border: 2px solid #e0e0e0;
+            padding: 12px 16px;
+            font-size: 18px;
+            text-align: center;
+            letter-spacing: 4px;
+            margin-top: 24px;
+        }
+        .verify-card .code-input:focus {
+            border-color: #ff6b6b;
+            box-shadow: 0 0 0 3px #ff6b6b20;
+            outline: none;
+        }
+        .btn-verify {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            border: none;
+            border-radius: 12px;
+            padding: 10px 0;
+            font-weight: 600;
+            color: white;
+            width: 100%;
+            margin-top: 16px;
+        }
+        .btn-verify:hover { opacity: 0.9; color: white; }
+        .alert-error {
+            background: #fff3f0;
+            color: #d63031;
+            border: 1px solid #ffd0cc;
+            border-radius: 10px;
+            font-size: 13px;
+            padding: 8px 12px;
+            margin-top: 14px;
+        }
+        .verify-card .footer {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #bbb;
+        }
+        .verify-card .footer a { color: #bbb; text-decoration: none; }
+        .verify-card .footer span + span::before { content: " · "; }
+    </style>
+</head>
+<body>
+
+<div class="verify-card">
+    <div class="brand">🍚 蹭饭地图</div>
+    <div class="subtitle">该站点已开启信息安全核验<br>请输入访问校验码后进入</div>
+
+    <form method="post" th:action="@{/verify}">
+        <input type="hidden" name="next" th:value="${next}">
+        <input type="password" class="code-input form-control" name="code" autofocus
+               autocomplete="off" placeholder="请输入校验码">
+        <button type="submit" class="btn btn-verify">🔓 进入</button>
+        <div class="alert-error" th:if="${error}" th:text="${error}">校验码错误</div>
+    </form>
+
+    <div class="footer"
+         th:if="${!#strings.isEmpty(icpNumber) or !#strings.isEmpty(netFilingNumber)}">
+        <span th:if="${!#strings.isEmpty(icpNumber)}">
+            <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener" th:text="${icpNumber}"></a>
+        </span>
+        <span th:if="${!#strings.isEmpty(netFilingNumber)}" th:text="${netFilingNumber}"></span>
+    </div>
+</div>
+
+</body>
+</html>

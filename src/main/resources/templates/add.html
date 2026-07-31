@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添加同学 - 蹭饭地图</title>
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #f5f5f5; }
+        .navbar { background: linear-gradient(135deg, #ff6b6b, #ee5a24) !important; }
+        .card { border: none; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        .card-header { background: transparent; border-bottom: 1px solid #eee; padding: 20px 24px 16px; }
+        .card-body { padding: 24px; }
+        .form-label { font-weight: 500; color: #555; font-size: 14px; }
+        .form-control, .form-select {
+            border-radius: 10px;
+            border: 1.5px solid #e0e0e0;
+            padding: 10px 14px;
+            font-size: 14px;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: #ff6b6b;
+            box-shadow: 0 0 0 3px #ff6b6b20;
+        }
+        .btn-submit {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            border: none;
+            border-radius: 10px;
+            padding: 10px 40px;
+            font-weight: 600;
+            color: white;
+        }
+        .btn-submit:hover { opacity: 0.9; color: white; }
+        .hint-text { font-size: 13px; color: #999; margin-top: 4px; }
+
+        /* ===== 页面底部备案信息 ===== */
+        .site-footer {
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+            padding: 16px 0 20px;
+        }
+        .site-footer a { color: #999; text-decoration: none; }
+        .site-footer span + span::before { content: " · "; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark">
+    <div class="container-fluid px-4">
+        <a class="navbar-brand fw-bold" href="/">🍚 蹭饭地图</a>
+        <span class="text-white-50 small">添加同学</span>
+    </div>
+</nav>
+
+<div class="container py-4" style="max-width: 640px;">
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">📝 添加新同学</h5>
+            <small class="text-muted">把同学的位置标记在地图上吧！</small>
+        </div>
+        <div class="card-body">
+            <form action="/classmates" method="post">
+                <!-- 姓名 -->
+                <div class="mb-3">
+                    <label class="form-label">姓名 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="name" required
+                           placeholder="输入同学姓名" maxlength="50">
+                </div>
+
+                <!-- 大学 -->
+                <div class="mb-3">
+                    <label class="form-label">录取大学</label>
+                    <input type="text" class="form-control" name="university"
+                           placeholder="如：清华大学（选填）" maxlength="100">
+                </div>
+
+                <!-- 省份选择 -->
+                <div class="mb-3">
+                    <label class="form-label">省份 <span class="text-danger">*</span></label>
+                    <select class="form-select" id="provinceSelect" required>
+                        <option value="">—— 请选择省份 ——</option>
+                    </select>
+                </div>
+
+                <!-- 城市选择 -->
+                <div class="mb-3">
+                    <label class="form-label">城市 <span class="text-danger">*</span></label>
+                    <select class="form-select" name="city" id="citySelect" required>
+                        <option value="">—— 请先选择省份 ——</option>
+                    </select>
+                </div>
+
+                <!-- 隐藏字段 -->
+                <input type="hidden" name="province" id="provinceInput">
+                <input type="hidden" name="latitude" id="latitudeInput">
+                <input type="hidden" name="longitude" id="longitudeInput">
+
+                <!-- 备注 -->
+                <div class="mb-4">
+                    <label class="form-label">留言 / 备注</label>
+                    <textarea class="form-control" name="note" rows="2"
+                              placeholder="想对同学们说点什么？比如「来我这请你吃火锅！」" maxlength="500"></textarea>
+                </div>
+
+                <!-- 按钮 -->
+                <div class="d-flex gap-3">
+                    <button type="submit" class="btn btn-submit" id="submitBtn" disabled>✅ 添加</button>
+                    <a href="/" class="btn btn-outline-secondary rounded-pill px-4">← 返回地图</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    var cityData = {}; // province -> [{name, lat, lng}]
+
+    // 加载省份数据
+    fetch('/api/provinces')
+        .then(function(r) { return r.json(); })
+        .then(function(provinces) {
+            var sel = document.getElementById('provinceSelect');
+            provinces.forEach(function(p) {
+                var opt = document.createElement('option');
+                opt.value = p.province;
+                opt.textContent = p.province;
+                sel.appendChild(opt);
+                cityData[p.province] = p.cities;
+            });
+        });
+
+    // 省份变更 → 更新城市下拉
+    document.getElementById('provinceSelect').addEventListener('change', function() {
+        var citySel = document.getElementById('citySelect');
+        citySel.innerHTML = '<option value="">—— 请选择城市 ——</option>';
+        citySel.disabled = true;
+        document.getElementById('provinceInput').value = '';
+        document.getElementById('latitudeInput').value = '';
+        document.getElementById('longitudeInput').value = '';
+        document.getElementById('submitBtn').disabled = true;
+
+        var province = this.value;
+        if (!province) return;
+
+        var cities = cityData[province] || [];
+        cities.forEach(function(c) {
+            var opt = document.createElement('option');
+            opt.value = c.name;
+            opt.textContent = c.name;
+            opt.dataset.lat = c.latitude;
+            opt.dataset.lng = c.longitude;
+            citySel.appendChild(opt);
+        });
+        citySel.disabled = false;
+        document.getElementById('provinceInput').value = province;
+    });
+
+    // 城市变更 → 填充经纬度和启用提交
+    document.getElementById('citySelect').addEventListener('change', function() {
+        var selected = this.options[this.selectedIndex];
+        if (selected && selected.dataset && selected.dataset.lat) {
+            document.getElementById('latitudeInput').value = selected.dataset.lat;
+            document.getElementById('longitudeInput').value = selected.dataset.lng;
+            document.getElementById('submitBtn').disabled = false;
+        } else {
+            document.getElementById('latitudeInput').value = '';
+            document.getElementById('longitudeInput').value = '';
+            document.getElementById('submitBtn').disabled = true;
+        }
+    });
+</script>
+
+<!-- 页面底部备案信息（在 config.yml 的 app.site 中配置） -->
+<footer class="site-footer"
+        th:if="${!#strings.isEmpty(icpNumber) or !#strings.isEmpty(netFilingNumber)}">
+    <span th:if="${!#strings.isEmpty(icpNumber)}">
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener" th:text="${icpNumber}"></a>
+    </span>
+    <span th:if="${!#strings.isEmpty(netFilingNumber)}" th:text="${netFilingNumber}"></span>
+</footer>
+
+</body>
+</html>

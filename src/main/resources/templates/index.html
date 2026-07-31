@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>蹭饭地图 🍚</title>
+
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- 高德地图 JS API 1.4（v2.0 在当前浏览器环境有兼容问题）
+         脚本地址与 Key 由后端按 config.yml 的 app.amap.key 动态注入 -->
+    <script th:if="${amapUrl}" th:src="${amapUrl}"></script>
+
+    <style>
+        html, body { height: 100%; margin: 0; padding: 0; }
+        body { background: #f5f5f5; }
+
+        .navbar { background: linear-gradient(135deg, #ff6b6b, #ee5a24) !important; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+
+        #map-container {
+            height: calc(100vh - 56px);
+            width: 100%;
+            position: relative;
+        }
+        #map { height: 100%; width: 100%; }
+
+        /* ===== 搜索面板（桌面端：左侧浮动） ===== */
+        .search-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 999;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            width: 320px;
+            max-height: calc(100vh - 100px);
+            display: flex;
+            flex-direction: column;
+        }
+        .search-panel .panel-body {
+            padding: 16px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            flex: 1 1 auto;
+        }
+        /* 手机端：底部全宽 */
+        @media (max-width: 768px) {
+            .search-panel {
+                top: 8px;
+                left: 8px;
+                right: 8px;
+                bottom: auto;
+                width: auto;
+                max-height: 45vh;
+                padding: 0;
+                border-radius: 16px;
+                overflow: hidden;
+            }
+            .search-panel { transition: max-height 0.35s ease; }
+            .search-panel .panel-body {
+                padding: 12px;
+                max-height: 2000px;
+                opacity: 1;
+                overflow: hidden;
+                transition: max-height 0.35s ease, opacity 0.25s ease, padding 0.25s ease;
+            }
+            .panel-handle { display: flex !important; }
+            .search-panel.collapsed { max-height: 40px; }
+            .search-panel.collapsed .panel-body {
+                max-height: 0;
+                opacity: 0;
+                padding-top: 0;
+                padding-bottom: 0;
+                margin-bottom: 0;
+            }
+            .search-panel .classmate-list .list-item { padding: 8px 10px; }
+            .navbar-brand { font-size: 16px; }
+            .navbar .container-fluid { padding-left: 12px !important; padding-right: 12px !important; }
+        }
+        @media (max-width: 480px) {
+            .search-panel { max-height: 50vh; }
+            .search-panel.collapsed { max-height: 36px; }
+            .search-panel .search-box { margin-bottom: 8px; }
+            .search-panel .classmate-list .list-item .info { font-size: 12px; }
+            .navbar .btn { font-size: 12px; padding: 4px 12px; }
+            .navbar .small { font-size: 12px; }
+        }
+
+        /* 折叠手柄 */
+        .panel-handle {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 16px;
+            background: #fff;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .panel-handle:active { background: #f5f5f5; }
+        .panel-handle .panel-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+        }
+        .panel-handle .panel-indicator {
+            font-size: 12px;
+            color: #999;
+            transition: transform 0.3s ease;
+        }
+        .search-panel.collapsed .panel-indicator {
+            transform: rotate(180deg);
+        }
+        .panel-body { overflow: hidden; }
+        .search-panel .search-box {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .search-panel .classmate-list {
+            overflow-y: auto;
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+        .search-panel .classmate-list::-webkit-scrollbar {
+            width: 5px;
+        }
+        .search-panel .classmate-list::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 3px;
+        }
+        .search-panel .classmate-list::-webkit-scrollbar-thumb:hover {
+            background: #aaa;
+        }
+        .search-panel .classmate-list .list-item {
+            padding: 10px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+            border-left: 3px solid transparent;
+            margin-bottom: 6px;
+            background: #fafafa;
+        }
+        .search-panel .classmate-list .list-item:hover {
+            background: #fff3e0;
+            border-left-color: #ff6b6b;
+        }
+        .search-panel .classmate-list .list-item .name {
+            font-weight: 600;
+            color: #333;
+        }
+        .search-panel .classmate-list .list-item .info {
+            font-size: 13px;
+            color: #888;
+            margin-top: 2px;
+        }
+        .search-panel .classmate-list .list-item .badge-city {
+            font-size: 12px;
+            background: #ff6b6b20;
+            color: #ee5a24;
+            padding: 1px 8px;
+            border-radius: 10px;
+        }
+
+        /* 信息窗体 */
+        .custom-info {
+            padding: 12px 16px;
+            min-width: 200px;
+            max-width: 260px;
+        }
+        .custom-info h6 {
+            margin-bottom: 4px;
+            color: #ee5a24;
+            font-weight: 700;
+        }
+        .custom-info .city-tag { font-size: 13px; color: #666; }
+        .custom-info .note {
+            font-size: 13px; color: #999; margin-top: 6px; font-style: italic;
+        }
+        .custom-info .actions {
+            margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap;
+        }
+        .custom-info .actions a { font-size: 12px; text-decoration: none; }
+
+        .empty-state { text-align: center; padding: 30px 20px; color: #aaa; }
+        .empty-state .emoji { font-size: 48px; }
+        .empty-state p { margin-top: 10px; }
+        .classmate-list::-webkit-scrollbar { width: 4px; }
+        .classmate-list::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+
+        /* ===== 高德 Key 未配置提示 ===== */
+        .amap-warning {
+            position: fixed;
+            top: 64px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2000;
+            background: #fff3cd;
+            color: #664d03;
+            border: 1px solid #ffe69c;
+            border-radius: 10px;
+            padding: 8px 16px;
+            font-size: 13px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+            max-width: 90%;
+        }
+
+        /* ===== 页面底部备案信息 ===== */
+        .site-footer {
+            position: fixed;
+            bottom: 8px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+            z-index: 900;
+            pointer-events: none;
+        }
+        .site-footer a { color: #999; text-decoration: none; pointer-events: auto; }
+        .site-footer span + span::before { content: " · "; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark">
+    <div class="container-fluid px-4">
+        <a class="navbar-brand fw-bold" href="/">🍚 蹭饭地图</a>
+        <div class="d-flex align-items-center gap-3">
+            <span class="text-white-50 small">
+                共 <strong class="text-white" id="totalCount" th:text="${total}">0</strong> 位同学
+            </span>
+            <a href="/classmates/import" class="btn btn-light btn-sm rounded-pill px-3 me-2">📥 导入</a>
+            <a href="/classmates/export" class="btn btn-light btn-sm rounded-pill px-3 me-2">📤 导出</a>
+            <a href="/classmates/add" class="btn btn-light btn-sm rounded-pill px-3">➕ 添加</a>
+        </div>
+    </div>
+</nav>
+
+<!-- 高德 Key 未配置时的提示 -->
+<div class="amap-warning" th:if="${#strings.isEmpty(amapKey)}">
+    ⚠️ 未配置高德地图 API Key，地图无法显示。请在项目根目录 <code>config.yml</code> 的
+    <code>app.amap.key</code> 中填写后重启应用。
+</div>
+
+<div id="map-container">
+    <!-- 搜索面板 -->
+    <div class="search-panel" id="searchPanel">
+        <div class="panel-handle" id="panelHandle" onclick="togglePanel()">
+            <span class="panel-indicator" id="panelIndicator">▲</span>
+            <span class="panel-title">同学列表</span>
+        </div>
+        <div class="panel-body" id="panelBody">
+            <div class="search-box">
+                <input type="text" class="form-control form-control-sm" id="searchInput"
+                       placeholder="搜索姓名 / 城市 / 大学..." oninput="searchClassmates()">
+                <button class="btn btn-outline-secondary btn-sm" onclick="clearSearch()">✕</button>
+            </div>
+            <div class="classmate-list" id="classmateList"></div>
+        </div>
+    </div>
+    <div id="map"></div>
+</div>
+
+<!-- 页面底部备案信息（在 config.yml 的 app.site 中配置） -->
+<div class="site-footer"
+     th:if="${!#strings.isEmpty(icpNumber) or !#strings.isEmpty(netFilingNumber)}">
+    <span th:if="${!#strings.isEmpty(icpNumber)}">
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener" th:text="${icpNumber}"></a>
+    </span>
+    <span th:if="${!#strings.isEmpty(netFilingNumber)}" th:text="${netFilingNumber}"></span>
+</div>
+
+<script>
+console.log('[Map] 页面加载');
+let map = null;
+let markers = [];
+let allClassmates = [];
+let currentClassmates = [];
+let infoWindow = null;
+let panelCollapsed = false;
+
+function initMap() {
+    console.log('[Map] 开始初始化');
+    try {
+        map = new AMap.Map('map', {
+            zoom: 5,
+            center: [104.0, 34.0],
+            resizeEnable: true
+        });
+        console.log('[Map] 地图实例创建成功');
+
+        infoWindow = new AMap.InfoWindow({
+            offset: new AMap.Pixel(0, -30),
+            isCustom: false
+        });
+
+        // 缩放后动态重排标记，防止不同倍率下遮挡
+        map.on('zoomend', function() {
+            if (currentClassmates.length > 0) {
+                renderMarkers(currentClassmates, true);
+            }
+        });
+
+        loadClassmates();
+    } catch (e) {
+        console.error('[Map] 初始化失败:', e);
+    }
+}
+
+function loadClassmates(keyword) {
+    const url = keyword && keyword.trim()
+        ? '/api/classmates?keyword=' + encodeURIComponent(keyword.trim())
+        : '/api/classmates';
+
+    fetch(url)
+        .then(res => {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.json();
+        })
+        .then(data => {
+            console.log('[Map] 加载同学数据:', data.length, '条');
+            allClassmates = data;
+            currentClassmates = data;
+            renderMarkers(data);
+            renderList(data);
+            document.getElementById('totalCount').textContent = data.length;
+        })
+        .catch(err => console.error('[Map] 加载数据失败:', err));
+}
+
+function renderMarkers(classmates, skipFit) {
+    markers.forEach(m => map.remove(m));
+    markers = [];
+    if (classmates.length === 0) return;
+
+    // 按城市分组（四舍五入到小数点后4位），同城加偏移避免重叠
+    var cityGroups = {};
+    classmates.forEach(function(c) {
+        var lng = Number(c.longitude);
+        var lat = Number(c.latitude);
+        if (!lng || !lat || isNaN(lng) || isNaN(lat)) return;
+        // 用四舍五入后的坐标作为分组 key
+        var key = Math.round(lng * 10000) + ',' + Math.round(lat * 10000);
+        if (!cityGroups[key]) cityGroups[key] = [];
+        cityGroups[key].push(c);
+    });
+
+    // 获取当前缩放级别，用于计算基于像素的偏移
+    var zoom = map.getZoom();
+    // 地图分辨率（米/像素），低缩放≈大数值
+    var res = map.getResolution() || (156543.03392 * Math.cos(35 * Math.PI / 180) / Math.pow(2, zoom));
+    // 像素偏移半径随缩放级别平滑变化：zoom=5→8px（紧凑簇），zoom=14→40px（舒展分离）
+    var t = Math.min(1, Math.max(0, (zoom - 5) / 9));
+    var basePx = 8 + t * 32;
+
+    Object.keys(cityGroups).forEach(function(key) {
+        var group = cityGroups[key];
+        var baseLng = Number(group[0].longitude);
+        var baseLat = Number(group[0].latitude);
+        var total = group.length;
+
+        // 同城人数增加时扩大偏移半径（每人增加 4px 间距）
+        var pixelRadius = basePx + (total > 1 ? Math.min(total - 1, 8) * 4 : 0);
+        // 像素→经纬度转换（考虑纬度对经度一度的长度影响）
+        var meters = pixelRadius * res;
+        var degLat = meters / 111319;
+        var degLng = meters / (111319 * Math.cos(baseLat * Math.PI / 180));
+
+        group.forEach(function(c, idx) {
+            // 均匀分布在圆上
+            var angle = (idx / total) * Math.PI * 2;
+            var offsetLng = Math.cos(angle) * degLng;
+            var offsetLat = Math.sin(angle) * degLat;
+
+            var pos = [baseLng + offsetLng, baseLat + offsetLat];
+            var color = '#ff6b6b';
+            var el = document.createElement('div');
+            el.innerHTML = '<div style="background:linear-gradient(135deg,' + color + ',' + color + 'dd);color:white;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:bold;box-shadow:0 2px 8px ' + color + '66;border:2px solid white;cursor:pointer">' + c.name.charAt(0) + '</div>';
+
+            try {
+                var marker = new AMap.Marker({
+                    position: pos,
+                    content: el,
+                    offset: new AMap.Pixel(-18, -18),
+                    title: c.name
+                });
+                marker._classmateId = c.id; // 绑定同学 ID 到标记
+                marker.on('click', function() { showInfo(c, marker); });
+                markers.push(marker);
+            } catch (e) {
+                console.warn('[Map] 创建标记失败:', c.name);
+            }
+        });
+    });
+
+    if (markers.length > 0) {
+        try {
+            map.add(markers);
+            if (!skipFit) {
+                // 首次渲染：自适应视野，之后 zoomend 会触发重排
+                var minLng = 999, maxLng = -999, minLat = 999, maxLat = -999;
+                for (var i = 0; i < markers.length; i++) {
+                    var pos = markers[i].getPosition();
+                    if (pos) {
+                        var ml = pos.getLng();
+                        var ma = pos.getLat();
+                        if (ml < minLng) minLng = ml;
+                        if (ml > maxLng) maxLng = ml;
+                        if (ma < minLat) minLat = ma;
+                        if (ma > maxLat) maxLat = ma;
+                    }
+                }
+                if (minLng < 999) {
+                    var padLng = (maxLng - minLng) * 0.25 || 2;
+                    var padLat = (maxLat - minLat) * 0.25 || 1;
+                    map.setBounds(new AMap.Bounds(
+                        new AMap.LngLat(minLng - padLng, minLat - padLat),
+                        new AMap.LngLat(maxLng + padLng, maxLat + padLat)
+                    ));
+                }
+            }
+            console.log('[Map] 已添加', markers.length, '个标记');
+        } catch (e) {
+            console.warn('[Map] 适配视野失败:', e.message);
+        }
+    }
+}
+
+function showInfo(c, marker) {
+    var content = '<div class="custom-info">' +
+        '<h6>' + c.name + '</h6>' +
+        '<div class="city-tag">📍 ' + c.city + (c.university ? ' · ' + c.university : '') + '</div>' +
+        '<div class="note">' + (c.note || '（暂无留言）') + '</div>' +
+        '<div class="actions">' +
+        '<a href="/classmates/edit/' + c.id + '" class="btn btn-outline-primary btn-sm">✏️ 编辑</a>' +
+        '<a href="/classmates/delete/' + c.id + '" class="btn btn-outline-danger btn-sm" onclick="return confirm(\'确定删除 ' + c.name + ' 吗？\')">🗑️ 删除</a>' +
+        '</div></div>';
+    infoWindow.setContent(content);
+    infoWindow.open(map, marker.getPosition());
+}
+
+function renderList(classmates) {
+    var container = document.getElementById('classmateList');
+    if (classmates.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="emoji">🔍</div><p>还没有同学数据<br>点击右上角「添加同学」开始吧！</p></div>';
+        return;
+    }
+    var html = '';
+    for (var i = 0; i < classmates.length; i++) {
+        var c = classmates[i];
+        html += '<div class="list-item" onclick="focusMarker(' + c.id + ')">' +
+            '<div class="d-flex justify-content-between align-items-start">' +
+            '<span class="name">' + c.name + '</span>' +
+            '<span class="badge-city">' + c.city + '</span></div>' +
+            '<div class="info">' + (c.university ? '🎓 ' + c.university : '📍 ' + c.city) + '</div></div>';
+    }
+    container.innerHTML = html;
+}
+
+function focusMarker(id) {
+    // 先找到同学数据
+    var cm = null;
+    for (var j = 0; j < allClassmates.length; j++) {
+        if (allClassmates[j].id === id) { cm = allClassmates[j]; break; }
+    }
+    if (!cm) return;
+
+    // 找到当前标记位置
+    var pos = null;
+    for (var i = 0; i < markers.length; i++) {
+        if (markers[i]._classmateId === id) {
+            pos = markers[i].getPosition();
+            break;
+        }
+    }
+    if (!pos) return;
+
+    // 缩放至该标记位置（zoomend 会触发标记重排）
+    map.setZoomAndCenter(12, pos);
+
+    // 等待缩放动画 + 重排完成后弹出信息窗体，避免引用已移除的标记
+    var onZoomEnd = function() {
+        map.off('zoomend', onZoomEnd);
+        for (var i = 0; i < markers.length; i++) {
+            if (markers[i]._classmateId === id) {
+                showInfo(cm, markers[i]);
+                break;
+            }
+        }
+    };
+    map.on('zoomend', onZoomEnd);
+}
+
+function searchClassmates() {
+    loadClassmates(document.getElementById('searchInput').value);
+}
+function clearSearch() {
+    document.getElementById('searchInput').value = '';
+    loadClassmates();
+}
+function togglePanel() {
+    panelCollapsed = !panelCollapsed;
+    document.getElementById('searchPanel').classList.toggle('collapsed', panelCollapsed);
+    // 箭头由 CSS transform: rotate(180deg) 自动控制，无需改文字
+    if (map) setTimeout(function() { window.dispatchEvent(new Event('resize')); }, 300);
+}
+
+// 初始化
+window.addEventListener('load', function() {
+    console.log('[Map] window load 触发, AMap=', typeof AMap);
+    if (typeof AMap !== 'undefined') {
+        initMap();
+    } else {
+        setTimeout(function() {
+            if (typeof AMap !== 'undefined') initMap();
+            else console.error('[Map] AMap 加载失败');
+        }, 2000);
+    }
+});
+</script>
+
+</body>
+</html>
